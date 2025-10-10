@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Heap Sort Flash Sale</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script defer>
+async function fetchItems() {
+    const res = await fetch('/items');
+    const data = await res.json();
+    renderTable(data);
+}
+
+function renderTable(items) {
+    const tbody = document.getElementById('tbody');
+    tbody.innerHTML = "";
+    items.forEach(it => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${it.id}</td>
+            <td>${it.name}</td>
+            <td>${it.cost}</td>
+            <td>${it.discount}%</td>
+            <td>${it.final_cost}</td>
+            <td>${it.stock}</td>
+            <td>${it.category}</td>
+            <td><button onclick="deleteItem(${it.id})">Delete</button></td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+async function deleteItem(id) {
+    await fetch('/delete_item', {method:'POST', headers:{'Content-Type':'application/json'},
+                                 body: JSON.stringify({item_id: id})});
+    fetchItems();
+}
+
+async function addItem(ev) {
+    ev.preventDefault();
+    const data = Object.fromEntries(new FormData(ev.target));
+    await fetch('/add_item', {method:'POST', headers:{'Content-Type':'application/json'},
+                              body: JSON.stringify(data)});
+    closeModal(); fetchItems();
+}
+
+async function addRandom() {
+    await fetch('/add_random', {method:'POST'});
+    fetchItems();
+}
+
+async function addRandomBulk() {
+    const n = document.getElementById('bulkcount').value || 10000;
+    await fetch('/add_random_bulk', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({count:n})});
+    fetchItems();
+}
+
+async function randomizeOrder() {
+    await fetch('/randomize_order', {method:'POST'});
+    fetchItems();
+}
+
+async function sortBy(field, order) {
+    const res = await fetch('/sort', {method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({field, order})});
+    const result = await res.json();
+    document.getElementById('status').textContent = result.message;
+    fetchItems();
+}
+
+async function viewLogs() {
+    const res = await fetch('/logs');
+    const logs = await res.json();
+    const tbody = document.getElementById('logbody');
+    tbody.innerHTML = "";
+    logs.forEach((l,i)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${i+1}</td><td>${l.field}</td><td>${l.order}</td>
+                        <td>${l.count}</td><td>${l.time}</td><td>${l.timestamp}</td>`;
+        tbody.appendChild(tr);
+    });
+    document.getElementById('logmodal').style.display='flex';
+}
+
+function closeLogs(){document.getElementById('logmodal').style.display='none';}
+function openModal(){document.getElementById('addmodal').style.display='flex';}
+function closeModal(){document.getElementById('addmodal').style.display='none';}
+
+function randomizeForm(){
+    document.querySelector('#addform [name=name]').value = 'Rnd'+Math.random().toString(36).slice(2,6);
+    const cost = Math.floor(Math.random()*9000)+100;
+    const disc = Math.floor(Math.random()*80);
+    const stock = Math.floor(Math.random()*500);
+    document.querySelector('#addform [name=cost]').value = cost;
+    document.querySelector('#addform [name=discount]').value = disc;
+    document.querySelector('#addform [name=stock]').value = stock;
+    document.querySelector('#addform [name=category]').value = ['Tech','Wear','Home','Misc'][Math.floor(Math.random()*4)];
+    document.querySelector('#addform [name=final_cost]').value = (cost*(1-disc/100)).toFixed(2);
+}
+
+function updateFinalCost(){
+    const cost = parseFloat(document.querySelector('[name=cost]').value)||0;
+    const disc = parseFloat(document.querySelector('[name=discount]').value)||0;
+    document.querySelector('[name=final_cost]').value=(cost*(1-disc/100)).toFixed(2);
+}
+
+window.onload=fetchItems;
+</script>
+</head>
+<body>
+<header>
+    <div class="topbar">
+        <button onclick="openModal()">➕ Add Item</button>
+        <button onclick="addRandom()">🎲 Random Item</button>
+        <input id="bulkcount" type="number" placeholder="10000" style="width:80px;">
+        <button onclick="addRandomBulk()">➕ Add N Random</button>
+        <button onclick="randomizeOrder()">🔀 Randomize Order</button>
+        <button onclick="sortBy('cost','asc')">Cost ↑</button>
+        <button onclick="sortBy('cost','desc')">Cost ↓</button>
+        <button onclick="sortBy('final_cost','asc')">Discounted ↑</button>
+        <button onclick="sortBy('final_cost','desc')">Discounted ↓</button>
+        <button onclick="sortBy('stock','asc')">Stock ↑</button>
+        <button onclick="sortBy('stock','desc')">Stock ↓</button>
+        <button onclick="viewLogs()">🧾 View Logs</button>
+    </div>
+    <div id="status" class="statusbar">Ready.</div>
+</header>
+
+<main>
+<table>
+<thead><tr><th>ID</th><th>Name</th><th>Cost</th><th>Discount</th><th>Final Cost</th><th>Stock</th><th>Category</th><th>Action</th></tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</main>
+
+<div id="addmodal" class="modal">
+  <form id="addform" class="modal-content" onsubmit="addItem(event)">
+    <h3>Add Item</h3>
+    <label>Name <input name="name" required></label>
+    <label>Cost <input name="cost" type="number" oninput="updateFinalCost()" required></label>
+    <label>Discount (%) <input name="discount" type="number" oninput="updateFinalCost()" required></label>
+    <label>Final Cost <input name="final_cost" type="number" readonly></label>
+    <label>Stock <input name="stock" type="number" required></label>
+    <label>Category
+      <select name="category">
+        <option>Tech</option><option>Wear</option><option>Home</option><option>Misc</option>
+      </select>
+    </label>
+    <div class="modal-actions">
+      <button type="button" onclick="randomizeForm()">🎲 Randomize</button>
+      <button type="submit">✅ Save</button>
+      <button type="button" onclick="closeModal()">❌ Cancel</button>
+    </div>
+  </form>
+</div>
+
+<div id="logmodal" class="modal">
+  <div class="modal-content">
+    <h3>Sort Logs</h3>
+    <table>
+      <thead><tr><th>#</th><th>Field</th><th>Order</th><th>Count</th><th>Time (ms)</th><th>Timestamp</th></tr></thead>
+      <tbody id="logbody"></tbody>
+    </table>
+    <button onclick="closeLogs()">Close</button>
+  </div>
+</div>
+</body>
+</html>
